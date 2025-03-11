@@ -1,7 +1,7 @@
 ---
 title: "NeuroMex Analysis"
 author: "Hayden Mountcastle"
-date: "2025-01-30"
+date: "2025-03-11"
 output:
   pdf_document: default
   html_document: default
@@ -18,7 +18,7 @@ The purpose of this document is to run analysis for the NeuroMEX CIDI/LEC paper/
 
 We use NeuroMex Freeze 6 data, located in the Koenen Lab dropbox: /Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6
 
-The latest models and figures start at: **Regression update 1-13-25**
+The latest models and figures start at: **Regression update 1-13-25**, ignore previous. 
 
 # Libraries
 ```{r message=FALSE, warning=FALSE}
@@ -38,10 +38,17 @@ library(MASS)
 # Import data
 
 
-We are using the latest NeuroMex Datafreeze 6
+We are using the latest NeuroMex Datafreeze 6 -- final datafreeze released March 11th, 2025. 
+
+```{r}
+setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6")
+```
+
+
+
 ```{r message=FALSE, warning=FALSE}
-setwd("~/Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6") 
-nmex <- read.csv("NeuroMex_Freeze6_Draft1.csv")
+
+nmex <- read.csv("~/Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6/NeuroMex_Release6_Draft4.csv")
 ```
 
 
@@ -49,22 +56,44 @@ nmex <- read.csv("NeuroMex_Freeze6_Draft1.csv")
 
 ## Removing participants
 
+### Check for participants missing the UBACC
 
-We remove participants who did not complete UBACC or left the interview prematurely. 
+```{r}
+no_ubacc <- nmex %>% filter(is.na(ubacc_score_t1) & is.na(ubacc_score_t2)) %>% 
+  dplyr::select(partid) %>% pull()
+
+no_ubacc
+```
+
+### Check for missing in CIDI 
+At least 50% missingess in CIDI
+```{r}
+cidi_questions <- paste0("cidi_q", 1:18)
+
+# Filter participants who are missing all or at least 50% of the CIDI questions
+no_cidi <- nmex %>% 
+  rowwise() %>%
+  mutate(missing_cidi_count = sum(is.na(c_across(all_of(cidi_questions))))) %>%
+  ungroup() %>%
+  filter( missing_cidi_count >= length(cidi_questions) / 2) %>%
+ dplyr::select(partid) %>% pull()
+
+no_cidi
+```
+
+
+We remove participants who did not complete UBACC or left the interview prematurely (CIDI). 
 ```{r message=FALSE, warning=FALSE}
 
-#These participants are missing the UBACC
+#These participants are missing the UBACC, did not consent.
 nmex <- nmex %>% filter(!(partid %in% 
-                            c("CAP5649381", "CAP9216055", 
-                              "GEA7332459", "QUP2253899", "QUP5901822", 
-                              "QUP6859222")))
+                            no_ubacc))
+
 
 #These participants are missing all or 50% of the CIDI, 
 #will exclude for simplicity
 
-nmex <- nmex %>% filter(!(partid %in% 
-                            c("INP2366191", "INP4404950", 
-                              "JAP1320792", "INP1389432")))
+nmex <- nmex %>% filter(!(partid %in% no_cidi))
 
 ```
 
@@ -303,6 +332,25 @@ trauma_load_any_1 = rowSums(dplyr::select(.,
 Here we used the previously made sums of trauma to create a categorical variable of traumas experienced. 
 
 ```{r}
+nmex <- nmex %>% mutate(
+  trauma_load_inter_cat_4 = factor(case_when(
+    trauma_load_interpersonal_1 == 0 ~ "0",
+    trauma_load_interpersonal_1 == 1 ~ "1",
+    trauma_load_interpersonal_1 == 2 ~ "2",
+    trauma_load_interpersonal_1 == 3 ~ "3",
+    trauma_load_interpersonal_1 >= 4 ~ "4+",
+    TRUE ~ NA_character_
+  ),levels=c("0","1","2","3", "4+")),
+  
+  trauma_load_noninter_nhs_cat_4 = factor(case_when(
+    trauma_load_noninter_1_nhs == 0 ~ "0",
+    trauma_load_noninter_1_nhs == 1 ~ "1",
+    trauma_load_noninter_1_nhs == 2 ~ "2",
+    trauma_load_noninter_1_nhs == 3 ~ "3",
+    trauma_load_noninter_1_nhs >= 4 ~ "4+",
+    TRUE ~ NA_character_),levels=c("0","1","2","3", "4+"))
+)
+
 nmex <- nmex %>% mutate(
   trauma_load_inter_cat = factor(case_when(
     trauma_load_interpersonal_1 == 0 ~ "0",
@@ -792,6 +840,53 @@ table1(~ factor(cidi_any_binary) + #Any
 
 ```
 
+
+```{r}
+
+table1(~ factor(cidi_any_binary) + #Any
+         
+         factor(cidi_pain_binary) +  #Pain
+         factor(cidi_q1_binary) +  # Arthritis
+         factor(cidi_q2_binary) +  #Back or neck problems
+         factor(cidi_q3_binary) +  #Headaches
+         factor(cidi_q4_binary)  + #Other chronic pain
+         
+        factor(cidi_cardiac_binary) +  #Cardiometabolic
+        factor(cidi_q7_binary) +  #Heart attack
+         factor(cidi_q8_binary)  + #Heart disease
+         factor(cidi_q9_binary) +  #High blood pressure
+         factor(cidi_q13_binary) +  #Diabetes
+         
+        factor(cidi_resp_binary) +  #Respiratory
+        factor(cidi_q10_binary) +  #Asthma
+         factor(cidi_q11_binary) + #Tuberculosis
+         factor(cidi_q12_binary)  +  #Other lung
+         
+         factor(cidi_neur_binary) + #Neurological
+         factor(cidi_q6_binary) +  #Stroke
+         factor(cidi_q16_binary)  + #Epilepsy
+         
+          factor(cidi_q14_binary) +  #Ulcer
+         factor(cidi_q5_binary) +  #Allergies
+         factor(cidi_q18_binary)    #Hypothyroidism 
+       | trauma_load_inter_cat, overall=F, data=nmex_cases)
+
+
+table1(~ factor(cidi_any_binary) + #Any
+         
+         factor(cidi_pain_binary) +  #Pain
+         
+        factor(cidi_cardiac_binary) +  #Cardiometabolic
+        factor(cidi_resp_binary) +  #Respiratory
+        factor(cidi_q10_binary) +  #Asthma
+        factor(cidi_neur_binary) + #Neurological
+        factor(cidi_q14_binary) +  #Ulcer
+        factor(cidi_q5_binary) +  #Allergies
+        factor(cidi_q18_binary)    #Hypothyroidism 
+       | trauma_load_inter_cat_4, overall=F, data=nmex_cases)
+
+
+```
 
 
 # Models and Figures
@@ -1512,7 +1607,7 @@ In the title there will be the number of particicipants who endorsed the conditi
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 #Ensure correct path 
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
 
 outs<-unique(df_trauma_only$cidi_name)
 
@@ -1564,7 +1659,8 @@ Here we show all chronic conditions in the same figure for easy comparison for a
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
 
 cidi_name_order = c( "Arthritis/Rheumatism",
  "Back/neck problems",
@@ -1713,7 +1809,8 @@ mutate(OR = as.numeric(OR_or_RR),
 Here we modify Andrew R's code to create a figure of all outcomes on one page. 
 
 ```{r}
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
 
 df_gg <- df_trauma_only %>% filter(model == "Model B")
 df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
@@ -1869,7 +1966,8 @@ Andrew
 ```{r}
 
 #Ensure correct path
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
 
 df_gg <- df_trauma_only %>% filter(model == "Model B")
 
@@ -2122,6 +2220,7 @@ df_trauma_only <- df %>%
 
 Here we create a figure compiling the above data. 
 ```{r eval=FALSE, include=FALSE}
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
 
 pdf("Poisson_modelBCDE.pdf")
 df_trauma_only$RR <- as.numeric(df_trauma_only$RR)
@@ -2471,7 +2570,7 @@ dispersiontest(fit)
 ```
 
 
-### NB GLM -01-27-2025 (current)
+### NB GLM 01-27-2025 (current)
 
 
 After showing these above tests to Andrew, 
@@ -2621,7 +2720,8 @@ Here I create the figure for Model B's chronic condition count using the output 
 ```{r}
 
 
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
 
 pdf("NB_ModelB.pdf", width = 8, height = 6)
 
@@ -2741,7 +2841,7 @@ Here I produce the figure. The facets will be in 2 rows, with 4 columns.
 
 ```{r}
 
-setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
 
 
 pdf(paste0("Compiled results_ModelB_withCCcount",today(),".pdf"), width=10, height=8)
