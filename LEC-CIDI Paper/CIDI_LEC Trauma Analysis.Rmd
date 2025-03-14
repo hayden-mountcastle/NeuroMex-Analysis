@@ -3,8 +3,11 @@ title: "NeuroMex Analysis"
 author: "Hayden Mountcastle"
 date: "2025-03-11"
 output:
-  pdf_document: default
-  html_document: default
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
@@ -14,11 +17,12 @@ knitr::opts_chunk$set(echo = TRUE)
 # Purpose
 
 
-The purpose of this document is to run analysis for the NeuroMEX CIDI/LEC paper/ The main aim is to determine whether exposure to interpersonal and/or noninterpersonal traumas impact chronic condition outcomes. 
+The purpose of this document is to run analysis for the NeuroMEX CIDI/LEC paper. The main aim is to determine whether exposure to interpersonal and/or noninterpersonal traumas impact chronic condition outcomes. 
 
 We use NeuroMex Freeze 6 data, located in the Koenen Lab dropbox: /Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6
 
 The latest models and figures start at: **Regression update 1-13-25**, ignore previous. 
+The latest model for chronic count data is **NB GLM 01-27-2025 (current)**, ignore previous.
 
 # Libraries
 ```{r message=FALSE, warning=FALSE}
@@ -51,7 +55,7 @@ setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data 
 nmex <- read.csv("~/Dropbox (Harvard University)/NeuroMex/6. Data Freezes/Data Freeze 6/NeuroMex_Release6_Draft4.csv")
 ```
 
-
+\newpage
 # C. Cleaning Data
 
 ## Removing participants
@@ -82,7 +86,7 @@ no_cidi
 ```
 
 
-We remove participants who did not complete UBACC or left the interview prematurely (CIDI). 
+We remove participants who did not complete UBACC or left the CIDI prematurely. 
 ```{r message=FALSE, warning=FALSE}
 
 #These participants are missing the UBACC, did not consent.
@@ -99,6 +103,7 @@ nmex <- nmex %>% filter(!(partid %in% no_cidi))
 
 
 
+\newpage
 ## Demographics
 
 ### Cleaning basic variables
@@ -268,16 +273,15 @@ kable(table(nmex$civil_status), col.names = c("Civil status", "N"), caption = "F
 kable(table(nmex$civil_status_ord), col.names = c("Civil status (Recoded)", "N"), caption = "Frequency of Civil Status Recoded")
 
 ```
-
+\newpage
 ## LEC
 
 #### Trauma Loads
 
+Here, we code for interpersonal trauma and noninterpersonal trauma. We take the sum
+of each trauma (binary) for "happened to me only", which will give a sum of traumas experienced. We also calculate the sum for any trauma (both interpersonal and noninterpersonal trauma), but this is not used in the models. 
 
-Here, we code for interpersonal trauma, noninterpersonal trauma. We take the add
-of each trauma (binary) for "happened to me only", which will give a sum of traumas experienced. 
-
-We ignore violent death and accidental death as these can not "happen to me" 
+We ignore violent death and accidental death as these can not "happen to me".
 
 ```{r}
 #Interpersonal Trauma Load
@@ -331,6 +335,8 @@ trauma_load_any_1 = rowSums(dplyr::select(.,
 
 Here we used the previously made sums of trauma to create a categorical variable of traumas experienced. 
 
+We calculate for 4+ traumas, but decided we do not have the sample size to do this. In the models we use the 3+ trauma variables. 
+
 ```{r}
 nmex <- nmex %>% mutate(
   trauma_load_inter_cat_4 = factor(case_when(
@@ -378,7 +384,7 @@ kable(table(nmex$trauma_load_noninter_nhs_cat), col.names = c("Trauma Load NIT C
 
 ```
 
-
+\newpage
 ## CIDI
 
 
@@ -545,7 +551,7 @@ nmex <- nmex %>% mutate(cidi_binary = ifelse(cidi_load>0, 1, 0))
 
 ```
 
-
+\newpage
 ## ASSIST
 
 
@@ -612,7 +618,7 @@ kable(table(nmex$assist_cannabis_amt_recode), col.names = c("Cannabis Recode", "
 
 
 ```
-
+\newpage
 # Filter data to cases
 
 
@@ -641,11 +647,53 @@ label(nmex_cases$ses_status_f) <- "SES"
 label(nmex_cases$edu_ord) <- "Education"
 
 table1(~ age_at_interview + age_cat + psychosis_primary_f +
-         site_location_f + site_location_group_f + ses_status_f + factor(ses_status) +  edu_ord
+         site_location_f + site_location_group_f + ses_status_f + factor(ses_status) +  edu_ord 
    | is_male_f, data= nmex_cases, 
    caption = "Table 1: Demographics")
 ```
 
+
+
+```{r}
+
+nmex_cases %>% filter(!is.na(diagnosis_other)) %>%
+table1(~ factor(diagnosis_other_cat_1) +
+         factor(diagnosis_other_cat_2) +
+         factor(diagnosis_other_cat_3) +
+         factor(diagnosis_other_cat_4) +
+         factor(diagnosis_other_cat_5) +
+         factor(diagnosis_other_cat_6) +
+         factor(diagnosis_other_cat_7) +
+         factor(diagnosis_other_cat_8) +
+         factor(diagnosis_other_cat_9) +
+         factor(diagnosis_other_cat_10) +
+         factor(diagnosis_other_cat_11) +
+         factor(diagnosis_other_cat_12) +
+         factor(diagnosis_other_cat_13) +
+         factor(diagnosis_other_cat_999) 
+       | diagnosis_other, data= ., 
+   caption = "Table 1: Demographics")
+
+
+nmex_cases %>% filter(!is.na(diagnosis_other)) %>%
+table1(~ factor(diagnosis_other_cat_1) +
+         factor(diagnosis_other_cat_2) +
+         factor(diagnosis_other_cat_3) +
+         factor(diagnosis_other_cat_4) +
+         factor(diagnosis_other_cat_5) +
+         factor(diagnosis_other_cat_6) +
+         factor(diagnosis_other_cat_7) +
+         factor(diagnosis_other_cat_8) +
+         factor(diagnosis_other_cat_9) +
+         factor(diagnosis_other_cat_10) +
+         factor(diagnosis_other_cat_11) +
+         factor(diagnosis_other_cat_12) +
+         factor(diagnosis_other_cat_13) +
+         factor(diagnosis_other_cat_999) 
+       | diagnosis_other, data= ., 
+   caption = "Table 1: Demographics")
+
+```
 
 ### Interpersonal trauma: CIDI and Substance Use
 
@@ -717,6 +765,21 @@ table1(~ factor(cidi_q1_binary) +
 ```
 
 
+### Table Substance x Site
+
+```{r}
+
+table1(~
+      assist_tobacco_amt_recode +
+      assist_alcohol_amt_recode + 
+      assist_cannabis_amt_recode | site_location_f,
+       data= nmex_cases)
+
+
+```
+
+
+
 ### Table Sex X LEC
 
 
@@ -747,9 +810,12 @@ factor(transp_accident_1) + factor(serious_accident_1) + factor(toxic_sub_1) + f
 factor(illness_injury_1) +
 trauma_load_inter_cat +
 trauma_load_noninter_nhs_cat + 
+trauma_load_inter_cat_4 +
+trauma_load_noninter_nhs_cat_4 + 
 trauma_load_interpersonal_1 + 
 trauma_load_noninter_1_nhs +
 trauma_load_any_1 | is_male_f, data=nmex_cases)
+
 
 
 
@@ -760,7 +826,9 @@ factor(natural_disaster_1) + factor(fire_exp_1) +
 factor(transp_accident_1) + factor(serious_accident_1) + factor(toxic_sub_1) + factor(combat_1) + 
 factor(illness_injury_1) +
 trauma_load_inter_cat +
-trauma_load_noninter_nhs_cat + 
+trauma_load_noninter_nhs_cat +
+trauma_load_inter_cat_4 +
+trauma_load_noninter_nhs_cat_4 + 
 trauma_load_interpersonal_1 + 
 trauma_load_noninter_1_nhs +
 trauma_load_any_1 | is_male_f, overall=F, data=nmex_cases,
@@ -802,7 +870,9 @@ table1(~ factor(cidi_any_binary) + #Any
          
           factor(cidi_q14_binary) +  #Ulcer
          factor(cidi_q5_binary) +  #Allergies
-         factor(cidi_q18_binary)    #Hypothyroidism 
+         factor(cidi_q18_binary)  + #Hypothyroidism 
+         cidi_load + 
+        number_cidi
        | is_male_f, data=nmex_cases)
 
 
@@ -831,7 +901,9 @@ table1(~ factor(cidi_any_binary) + #Any
          
           factor(cidi_q14_binary) +  #Ulcer
          factor(cidi_q5_binary) +  #Allergies
-         factor(cidi_q18_binary)    #Hypothyroidism 
+         factor(cidi_q18_binary)  +  #Hypothyroidism 
+        cidi_load + 
+        number_cidi
        | is_male_f, overall=F, data=nmex_cases,
        extra.col=list(`P-value`=pvalue))
 
@@ -841,8 +913,9 @@ table1(~ factor(cidi_any_binary) + #Any
 ```
 
 
-```{r}
+# Table of LEC x CIDI
 
+```{r}
 table1(~ factor(cidi_any_binary) + #Any
          
          factor(cidi_pain_binary) +  #Pain
@@ -870,8 +943,112 @@ table1(~ factor(cidi_any_binary) + #Any
          factor(cidi_q5_binary) +  #Allergies
          factor(cidi_q18_binary)    #Hypothyroidism 
        | trauma_load_inter_cat, overall=F, data=nmex_cases)
+```
 
 
+
+### Final LECxCIDI
+
+These are the outcomes we are interested in in this paper, rather than all CIDI outcomes. 
+```{r}
+
+nmex_cases$cidi_pain_binary_f <- factor(nmex_cases$cidi_pain_binary)
+nmex_cases$cidi_cardiac_binary_f <- factor(nmex_cases$cidi_cardiac_binary)
+nmex_cases$cidi_resp_binary_f <- factor(nmex_cases$cidi_resp_binary)
+nmex_cases$cidi_resp_binary_f  <- factor(nmex_cases$cidi_neur_binary)
+nmex_cases$cidi_q14_binary_f <- factor(nmex_cases$cidi_q14_binary)
+nmex_cases$cidi_q5_binary_f <- factor(nmex_cases$cidi_q5_binary)
+nmex_cases$cidi_q18_binary_f <- factor(nmex_cases$cidi_q18_binary)
+nmex_cases$cidi_neur_binary_f <- factor(nmex_cases$cidi_neur_binary)
+
+
+label(nmex_cases$cidi_pain_binary_f) <- "Pain" 
+label(nmex_cases$cidi_cardiac_binary_f) <- "Cardiometabolic" 
+label(nmex_cases$cidi_resp_binary_f) <- "Respiratory" 
+label(nmex_cases$cidi_neur_binary_f) <- "Neurological"
+label(nmex_cases$cidi_q14_binary_f) <- "Ulcer"
+label(nmex_cases$cidi_q5_binary_f) <- "Allergies"
+label(nmex_cases$cidi_q18_binary_f) <- "Hypothyroidism"
+
+
+
+table1(~
+        cidi_pain_binary_f +  #Pain
+        cidi_cardiac_binary_f +  #Cardiometabolic
+        cidi_resp_binary_f  +  #Respiratory
+        cidi_resp_binary_f  + #Neurological
+        cidi_q14_binary_f +  #Ulcer
+        cidi_q5_binary_f +  #Allergies
+        cidi_q18_binary_f    #Hypothyroidism 
+       | trauma_load_inter_cat, overall=F, data=nmex_cases)
+
+
+table1(~
+        cidi_pain_binary_f +  #Pain
+        cidi_cardiac_binary_f +  #Cardiometabolic
+        cidi_resp_binary_f  +  #Respiratory
+        cidi_resp_binary_f  + #Neurological
+        cidi_q14_binary_f +  #Ulcer
+        cidi_q5_binary_f +  #Allergies
+        cidi_q18_binary_f    #Hypothyroidism 
+       | trauma_load_noninter_nhs_cat, overall=F, data=nmex_cases)
+
+
+table1(~
+        cidi_pain_binary_f +  #Pain
+        cidi_cardiac_binary_f +  #Cardiometabolic
+        cidi_resp_binary_f  +  #Respiratory
+        cidi_resp_binary_f  + #Neurological
+        cidi_q14_binary_f +  #Ulcer
+        cidi_q5_binary_f +  #Allergies
+        cidi_q18_binary_f    #Hypothyroidism 
+       | trauma_load_inter_cat_4, overall=F, data=nmex_cases,
+       caption = "Interpersonal trauma")
+
+
+table1(~
+        cidi_pain_binary_f +  #Pain
+        cidi_cardiac_binary_f +  #Cardiometabolic
+        cidi_resp_binary_f  +  #Respiratory
+        cidi_resp_binary_f  + #Neurological
+        cidi_q14_binary_f +  #Ulcer
+        cidi_q5_binary_f +  #Allergies
+        cidi_q18_binary_f    #Hypothyroidism 
+       | trauma_load_noninter_nhs_cat_4, overall=F, data=nmex_cases,
+       caption = "Noninterpersonal trauma")
+```
+
+
+```{r}
+
+table1(~
+         factor(cidi_pain_binary) +  #Pain
+         
+        factor(cidi_cardiac_binary) +  #Cardiometabolic
+        factor(cidi_resp_binary) +  #Respiratory
+        factor(cidi_neur_binary) + #Neurological
+        factor(cidi_q14_binary) +  #Ulcer
+        factor(cidi_q5_binary) +  #Allergies
+        factor(cidi_q18_binary)    #Hypothyroidism 
+       | trauma_load_inter_cat_4, overall=F, data=nmex_cases)
+
+
+table1(~
+         factor(cidi_pain_binary) +  #Pain
+        factor(cidi_cardiac_binary) +  #Cardiometabolic
+        factor(cidi_resp_binary) +  #Respiratory
+        factor(cidi_neur_binary) + #Neurological
+        factor(cidi_q14_binary) +  #Ulcer
+        factor(cidi_q5_binary) +  #Allergies
+        factor(cidi_q18_binary)    #Hypothyroidism 
+       | trauma_load_noninter_nhs_cat_4, overall=F, data=nmex_cases)
+
+
+
+```
+
+
+```{r}
 table1(~ factor(cidi_any_binary) + #Any
          
          factor(cidi_pain_binary) +  #Pain
@@ -888,7 +1065,7 @@ table1(~ factor(cidi_any_binary) + #Any
 
 ```
 
-
+\newpage
 # Models and Figures
 
 
@@ -1293,8 +1470,8 @@ mutate(OR = as.numeric(OR),
 
 ```
 
-
-### Regression - update 1-13-25 (current)
+\newpage
+## Regression - update 1-13-25 (current)
  
  
 **Update from 1-13-25**
@@ -1583,13 +1760,14 @@ cidi_order <- c("Pain", "Cardiometabolic","Respiratory",
                 "Seasonal allergies", "Hypothyroidism")  # Change as needed
 
 #Change model if needed
-reg_data <- df_trauma_only %>% filter(model == "Model D") %>%
+reg_data <- df_trauma_only %>% filter(model == "Model E") %>%
   mutate(ci_full = paste0("(",ci_ll, ", ", ci_ul, ")")) %>%
   dplyr::select(cidi_q, cidi_name, trauma_type, OR_or_RR, ci_full, 
                 Coefficient, prevalence, cidi_var_n, coef_name, 
          significant) %>% 
   mutate(cidi_name = factor(cidi_name, levels = cidi_order)) %>%
   arrange(cidi_name)
+
 
 
 ```
@@ -2058,7 +2236,6 @@ dev.off()
 
 ## Model: Poisson  (old)
 
-
 Here we run a poisson regression on chronic condition count
 
 #### Histogram
@@ -2256,7 +2433,7 @@ dev.off()
 
 Here we are updating the above code to match the bonferonni adjustments
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 
 results <- NULL
 df <- NULL
@@ -2375,7 +2552,7 @@ df_trauma_only <- df %>%
 
 #### Format data for tables
 
-```{r, include = F}
+```{r eval=FALSE, include=FALSE}
 
 pois_data <- df_trauma_only %>% filter(Model == "Model B") %>%
   mutate(ci_full = paste0("(",ci_ll, ", ", ci_ul, ")")) %>%
@@ -2388,7 +2565,7 @@ pois_data <- df_trauma_only %>% filter(Model == "Model B") %>%
 
 
 Here we create a figure compiling the above data for only Model B.
-```{r, include = F}
+```{r eval=FALSE, include=FALSE}
 
 setwd("/Users/ham593/Dropbox (Harvard University)/NeuroMex/Data Analysis/Trauma Abstract_1-24/CIDI_LEC 12-20-24/Updated Models")
 
@@ -2435,7 +2612,7 @@ dev.off()
 Here I will run the Poisson analysis for count data on model B only, as this seems like the most likely main model for our paper. 
 I will run tests on the model for overdisperson and heteroskedacity. 
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 
 bon_cor = 9
 results <- NULL
@@ -2538,14 +2715,14 @@ df_trauma_only <- df %>%
 
 
 Here we see that there is overdispersion
-```{r}
+```{r eval=FALSE, include=FALSE}
 dispersiontest(fit)
 ```
 
 
 We can confirm this in this plot of Residuals vs Fitted values by the fan-shaped pattern. 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 plot(fit)
 ```
 
@@ -2556,7 +2733,7 @@ Option 1: Keep poisson and use RSE
 Option 2: Use quasi-poisson to account for overdispersion
 Option 3: Option 2 plus RSE? 
 Option 4: Zero-inflated regression model
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 
 quasi_model <- glm(fmla, family = quasipoisson, data = nmex_cases)
@@ -2568,8 +2745,8 @@ dispersiontest(fit)
 
 ```
 
-
-### NB GLM 01-27-2025 (current)
+\newpage
+## NB GLM 01-27-2025 (current)
 
 
 After showing these above tests to Andrew, 
@@ -2579,7 +2756,6 @@ He suggests running a negative binomial regression instead. I do this below.
 
 
 ### Calculate data NBGLM
-
 
 Calculate the negative binomial GLM for all models. 
 ```{r}
@@ -3220,7 +3396,7 @@ dev.off()
 ```
 
 
-# DF gg temp 
+**Temporary df for models and figure**
 ```{r}
 
 

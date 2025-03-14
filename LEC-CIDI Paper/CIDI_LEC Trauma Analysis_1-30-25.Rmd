@@ -840,7 +840,7 @@ table1(~ factor(cidi_any_binary) + #Any
 
 ```
 
-
+## CIDI x LEC
 ```{r}
 
 table1(~ factor(cidi_any_binary) + #Any
@@ -1652,7 +1652,6 @@ dev.off()
 
 
 #### Figures: OR Model B and Model C (all CIDI together)
-
 
 
 Here we show all chronic conditions in the same figure for easy comparison for all four models. We separate outcomes for interpersonal and nonintepersonal trauma.
@@ -2873,3 +2872,710 @@ dev.off()
 ```
 
 
+# Current models with 4+ traumas
+
+## Regressions  4+ traumas
+
+These are the same current models as above, just run with 4+ trauma categories. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+cidi_list_binary <- c(
+  "cidi_q5_binary", "cidi_q14_binary", "cidi_q18_binary",
+  "cidi_pain_binary", "cidi_cardiac_binary",
+  "cidi_resp_binary", "cidi_neur_binary"
+)
+
+
+bon_cor <- length(cidi_list_binary) + 1
+
+results <- NULL
+df <- NULL
+
+models <- c("Model B", "Model C", "Model D", "Model E")
+
+
+# All Trauma
+
+for (model in models) {
+  if (model == "Model B") {
+    trauma_var <- "trauma_load_inter_cat_4 + trauma_load_noninter_nhs_cat_4"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f + 
+    site_location_group_f"
+    type <- "Categorical"
+  } else if (model == "Model C") {
+    trauma_var <- "trauma_load_interpersonal_1 + trauma_load_noninter_1_nhs"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f + 
+    site_location_group_f"
+    type <- "Numeric"
+  } else if (model == "Model D") {
+    trauma_var <- "trauma_load_inter_cat_4 + trauma_load_noninter_nhs_cat_4"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f + 
+    site_location_group_f + factor(assist_tobacco_amt_recode) + 
+    factor(assist_alcohol_amt_recode) + factor(assist_cannabis_amt_recode)"
+    type <- "Numeric"
+  } else if (model == "Model E") {
+    trauma_var <- "trauma_load_interpersonal_1 + trauma_load_noninter_1_nhs"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f +
+              factor(assist_tobacco_amt_recode) + 
+              factor(assist_alcohol_amt_recode) + 
+              factor(assist_cannabis_amt_recode) + site_location_group_f"
+    type <- "Numeric"
+  }
+
+  for (ii in 1:length(cidi_list_binary)) {
+    #print(model)
+    #print(cidi_list_binary[ii])
+    tab <- table(nmex_cases[cidi_list_binary[ii]])
+    prev <- tab[2] / (tab[1] + tab[2])
+    prev_round <- round(prev,3)
+    cidi_var <- cidi_list_binary[ii]
+    # Get number of cases
+    cidi_var_n <- table(nmex_cases[[cidi_var]])[2]
+
+    if (prev <= 0.1) {
+      fmla <- as.formula(paste(
+        cidi_list_binary[ii], " ~ ",
+        trauma_var, covar
+      ))
+      # Fit the model for logistic regression
+      fit <- glm(fmla, data = nmex_cases, family = binomial)
+
+      # get OR
+      fixef <- exp(coef(fit))
+
+      # Get confidence interval based on bonferonni)
+      conf <- exp(confint(fit, level = (1 - 0.05 / bon_cor)))
+
+      # Extract  CI of all values
+      conf_complete <- conf[complete.cases(conf), ]
+
+      # Get all coefficient names and levels
+      var <- rownames(conf_complete)
+
+      # For j in the number of coefficients (var)
+      for (j in 1:length(var)) {
+        reg_type <- "Logistic Regression"
+        var_temp <- var[j]
+
+        est <- round(exp(summary(fit)[["coefficients"]][
+          var[j],
+          "Estimate"
+        ]), 3)
+        # est <-     round(exp(summary(fit)[var[j]]), 3)
+        ci_ll <- round(conf_complete[var[j], 1], 3)
+        ci_ul <- round(conf_complete[var[j], 2], 3)
+        ci <- paste0("(", ci_ll, ", ", ci_ul, ")")
+
+
+
+        p <- summary(fit)$coefficients[var[j], "Pr(>|z|)"]
+        #print(paste("P val log reg:", p))
+
+        model <- model
+
+        if (p < (0.05 / bon_cor)) {
+          pval <- "Significant"
+        } else {
+          pval <- "Not significant"
+        }
+
+
+        results <- rbind(results, c(
+          cidi_var, var_temp, prev_round,
+          est, ci_ll, ci_ul, p, pval,
+          model, cidi_var_n, type, reg_type
+        ))
+      }
+    } else {
+      # if prev > 10%, do relative risk regression
+      reg_type <- "Relative Risk"
+      fmla <- as.formula(paste(
+        cidi_list_binary[ii], " ~ ",
+        trauma_var, covar
+      ))
+      # Fit the model for relative risk regression (poisson, log link).
+      fit <- glm(fmla, data = nmex_cases, family = poisson(link = "log"))
+
+      rse <- coeftest(fit, vcov = vcovHC(fit, type = "HC1"))
+      q <- qnorm(p = .05 / (2 * bon_cor), lower.tail = FALSE)
+
+      # Extract  beta, st_error, and p_val
+
+      estimate_complete <- rse[complete.cases(rse), 1]
+      rob_std_error_complete <- rse[complete.cases(rse), 2]
+      p_val_rob <- rse[complete.cases(rse), 4]
+
+      var <- rownames(rse)
+
+      for (j in 1:length(var)) {
+        var_temp <- var[j]
+        beta <- estimate_complete[var[j]]
+        est <- round(exp(beta),3)
+        robust_se <- rob_std_error_complete[var[j]]
+        p <- p_val_rob[var[j]]
+        #print(paste("P val rel risk reg:", p))
+
+        if (p < (0.05 / bon_cor)) {
+          pval <- "Significant"
+        } else {
+          pval <- "Not significant"
+        }
+
+        
+
+        ci_ll <- round(exp(beta - q * robust_se),3)
+        ci_ul <- round(exp(beta + q * robust_se),3)
+
+        results <- rbind(results, c(
+          cidi_var, var_temp, prev_round,
+          est, ci_ll, ci_ul, p, pval,
+          model, cidi_var_n, type, reg_type
+        ))
+      }
+    }
+  }
+}
+
+
+#Make results a dataframe and relabel
+df <- as.data.frame(results)
+colnames(df)<-c("cidi_q", "Coefficient", "prevalence", 
+                "OR_or_RR", "ci_ll", "ci_ul", "p", "significant", 
+                "model", "cidi_var_n", "type", "regression_type")
+
+
+df <- df %>% mutate(cidi_name = case_when(
+  cidi_q == "cidi_q1_binary" ~ "Arthritis/Rheumatism",
+  cidi_q == "cidi_q2_binary" ~ "Back/neck problems",
+  cidi_q == "cidi_q3_binary" ~ "Headaches",
+  cidi_q == "cidi_q4_binary" ~ "Other pain",
+  cidi_q == "cidi_q5_binary" ~ "Seasonal allergies",
+  cidi_q == "cidi_q6_binary" ~ "Stroke",
+  cidi_q == "cidi_q7_binary" ~ "Heart attack",
+  cidi_q == "cidi_q8_binary" ~ "Heart disease",
+  cidi_q == "cidi_q9_binary" ~ "High Blood Pressure",
+  cidi_q == "cidi_q10_binary" ~ "Asthma",
+  cidi_q == "cidi_q11_binary" ~ "Tuberculosis",
+  cidi_q == "cidi_q12_binary" ~ "Lung disease",
+  cidi_q == "cidi_q13_binary" ~ "Diabetes",
+  cidi_q == "cidi_q14_binary" ~ "Stomach/intestine ulcer",
+  cidi_q == "cidi_q15_binary" ~ "HIV/AIDS",
+  cidi_q == "cidi_q16_binary" ~ "Epilepsy/Seizures",
+  cidi_q == "cidi_q17_binary" ~ "Cancer",
+  cidi_q == "cidi_q18_binary" ~ "Hypothyroidism",
+  cidi_q == "cidi_pain_binary" ~ "Pain",
+  cidi_q == "cidi_cardiac_binary" ~ "Cardiometabolic",
+  cidi_q == "cidi_resp_binary" ~ "Respiratory",
+  cidi_q == "cidi_neur_binary" ~ "Neurological",
+  
+),
+
+coef_name = factor(case_when(
+  Coefficient == "trauma_load_inter_cat_41" ~ "1",
+  Coefficient == "trauma_load_inter_cat_42" ~ "2",
+  Coefficient == "trauma_load_inter_cat_43" ~ "3",
+  Coefficient == "trauma_load_inter_cat_44+" ~ "4+",
+  Coefficient == "trauma_load_noninter_nhs_cat_41" ~ "1",
+  Coefficient == "trauma_load_noninter_nhs_cat_42" ~ "2",
+  Coefficient == "trauma_load_noninter_nhs_cat_43" ~ "3",
+  Coefficient == "trauma_load_noninter_nhs_cat_44+" ~ "4+",
+  Coefficient == "trauma_load_interpersonal_1" ~ "Continuous",
+  Coefficient == "trauma_load_noninter_1_nhs" ~ "Continuous"
+), levels = c("1",
+              "2",
+              "3",
+              "4+",
+              "Continuous")),
+
+
+type = factor(type, levels = c("Numeric", "Categorical")),
+
+trauma_type = factor(case_when(
+            grepl("noninter", Coefficient) ~ "Non-interpersonal", 
+            grepl("inter_|interpersonal", Coefficient) ~ "Interpersonal"         
+          ),levels = c("Non-interpersonal", "Interpersonal"))
+)
+
+
+df_trauma_only <- df %>% 
+  filter(str_starts(Coefficient, "trauma_load"))
+
+```
+
+```{r}
+
+
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
+
+pdf(paste0("Compiled results_ModelBCDE_4cat_",today(),".pdf"), width=8, height=6)
+
+
+df_gg <- df_trauma_only %>% filter(model == "Model B")
+df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
+df_gg$ci_ll <- as.numeric(as.character(df_gg$ci_ll))
+df_gg$ci_ul <- as.numeric(as.character(df_gg$ci_ul))
+
+ggplot(df_gg, aes(x=coef_name, y=OR_or_RR, ymin=ci_ll, ymax=ci_ul, 
+                 shape=trauma_type, color=significant)) +
+  geom_pointrange(position=position_dodge(0.5))+
+  geom_hline(yintercept=1, lty=2)+
+  coord_flip()+ 
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+  scale_y_continuous(breaks = seq(0, 5.5, by = 1), limits = c(0, 5.5)) + 
+  facet_wrap(~cidi_name) +
+  theme_bw() + 
+  guides(color = guide_legend(reverse=T))+
+  xlab("Number of Traumatic Events")+
+  ylab("OR/RR (99.7% CI)")+
+  theme(legend.position = "bottom") +
+  ggtitle("Model B: Categorical")
+
+
+df_gg <- df_trauma_only %>% filter(model == "Model C")
+df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
+df_gg$ci_ll <- as.numeric(as.character(df_gg$ci_ll))
+df_gg$ci_ul <- as.numeric(as.character(df_gg$ci_ul))
+
+ggplot(df_gg, aes(x=coef_name, y=OR_or_RR, ymin=ci_ll, ymax=ci_ul, 
+                 shape=trauma_type, color=significant)) +
+  geom_pointrange(position=position_dodge(0.5))+
+  geom_hline(yintercept=1, lty=2)+
+  coord_flip()+ 
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+   scale_y_continuous(breaks = seq(0, 5.5, by = 1), limits = c(0, 5.5)) + 
+  facet_wrap(~cidi_name) +
+  theme_bw() + 
+    guides(color = guide_legend(reverse=T),
+         shape = guide_legend(reverse=T))+
+  xlab("Number of Traumatic Events")+
+  ylab("OR/RR (99.7% CI)")+
+  theme(legend.position = "bottom") + 
+  ggtitle("Model C: Continuous")
+
+
+df_gg <- df_trauma_only %>% filter(model == "Model D")
+df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
+df_gg$ci_ll <- as.numeric(as.character(df_gg$ci_ll))
+df_gg$ci_ul <- as.numeric(as.character(df_gg$ci_ul))
+
+ggplot(df_gg, aes(x=coef_name, y=OR_or_RR, ymin=ci_ll, ymax=ci_ul, 
+                 shape=trauma_type, color=significant)) +
+  geom_pointrange(position=position_dodge(0.5))+
+  geom_hline(yintercept=1, lty=2)+
+  coord_flip()+ 
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+ scale_y_continuous(breaks = seq(0, 5.5, by = 1), limits = c(0, 5.5)) + 
+  facet_wrap(~cidi_name) +
+  theme_bw() + 
+    guides(color = guide_legend(reverse=T),
+         shape = guide_legend(reverse=T))+
+  xlab("Number of Traumatic Events")+
+  ylab("OR/RR (99.7% CI)")+
+  theme(legend.position = "bottom") + 
+  ggtitle("Model D: Categorical + Substance Use")
+
+
+
+df_gg <- df_trauma_only %>% filter(model == "Model E")
+df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
+df_gg$ci_ll <- as.numeric(as.character(df_gg$ci_ll))
+df_gg$ci_ul <- as.numeric(as.character(df_gg$ci_ul))
+
+ggplot(df_gg, aes(x=coef_name, y=OR_or_RR, ymin=ci_ll, ymax=ci_ul, 
+                 shape=trauma_type, color=significant)) +
+  geom_pointrange(position=position_dodge(0.5))+
+  geom_hline(yintercept=1, lty=2)+
+  coord_flip()+ 
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+  scale_y_continuous(breaks = seq(0, 5.5, by = 1), limits = c(0, 5.5)) +  
+  facet_wrap(~cidi_name) +
+  theme_bw() + 
+    guides(color = guide_legend(reverse=T),
+         shape = guide_legend(reverse=T))+
+  xlab("Number of Traumatic Events")+
+  ylab("OR/RR (99.7% CI)")+
+  theme(legend.position = "bottom") + 
+  ggtitle("Model E: Continuous + Substance Use")
+
+
+dev.off()
+```
+
+
+# DF gg temp 
+```{r}
+
+
+df_gg <- df_trauma_only %>% filter(model == "Model B")
+
+#Add reference rows for all in cidi_name
+reference_row_total <- NULL
+for (i in unique(df_gg$cidi_name)) {
+  
+  reference_row <- data.frame(cidi_q = NA,
+                            Coefficient = NA,
+                            prevalence = NA, 
+                            OR_or_RR = 1, 
+                            ci_ll = 1, ci_ul = 1,
+                            p = NA, significant = "Not significant",  
+                            model="Model B", 
+                            cidi_var_n = NA, 
+                            type = NA,
+                            regression_type = NA, 
+                            cidi_name = i,
+                            coef_name = "0", 
+                            trauma_type = "Interpersonal")
+
+reference_row2 <- data.frame(cidi_q = NA,
+                            Coefficient = NA,
+                            prevalence = NA, 
+                            OR_or_RR = 1, 
+                            ci_ll = 1, ci_ul = 1,
+                            p = NA, significant = "Not significant",  
+                            model="Model B", 
+                            cidi_var_n = NA, 
+                            type = NA,
+                            regression_type = NA, 
+                            cidi_name = i,
+                            coef_name = "0", 
+                            trauma_type = "Non-interpersonal")
+  
+ reference_row_3 <- rbind(reference_row, reference_row2)
+ reference_row_total <- rbind(reference_row_total, reference_row_3)
+}
+
+
+
+
+#Ensure data is correct type
+#df_gg <- df_trauma_only %>% filter(model == "Model B")
+df_gg <- rbind(df_gg, reference_row_total)
+df_gg$coef_name <- factor(df_gg$coef_name, levels = c("0", "1", "2", "3","4+"))
+df_gg$OR_or_RR <- as.numeric(as.character(df_gg$OR_or_RR))
+df_gg$ci_ll <- as.numeric(as.character(df_gg$ci_ll))
+df_gg$ci_ul <- as.numeric(as.character(df_gg$ci_ul))
+
+#Adjust to relevel the data
+cidi_name_order <- c("Pain", "Stomach/intestine ulcer",
+                     "Seasonal allergies", "Neurological",  
+                     "Cardiometabolic", "Respiratory", "Hypothyroidism")
+                     
+df_gg$cidi_name <- factor(df_gg$cidi_name, levels = cidi_name_order)
+
+
+#Save this data for use later 
+#Will combine this with negative binomial model later
+df_gg_temp <- df_gg
+
+
+```
+
+### NB GLM 01-27-2025 (current)
+
+
+After showing these above tests to Andrew, 
+he confirmed that there does appear to be overdispersion. 
+
+He suggests running a negative binomial regression instead. I do this below. 
+
+
+### Calculate data NBGLM
+
+
+Calculate the negative binomial GLM for all models. 
+```{r}
+
+results <- NULL
+df <- NULL
+models <- c("Model B", "Model C", "Model D", "Model E")
+
+
+#All Trauma
+
+for (model in models) {
+  
+  if (model == "Model B") {
+    trauma_var <- "trauma_load_inter_cat_4 + trauma_load_noninter_nhs_cat_4"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f + 
+    site_location_group_f"
+    type <- "Categorical"
+  } else if (model == "Model C") {
+    trauma_var <- "trauma_load_interpersonal_1 + trauma_load_noninter_1_nhs"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f +
+    site_location_group_f"
+    type <- "Numeric"
+  } else if (model == "Model D") {
+    trauma_var <- "trauma_load_inter_cat_4 + trauma_load_noninter_nhs_cat_4"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f + 
+    site_location_group_f + assist_tobacco_amt_recode +
+    assist_alcohol_amt_recode +  assist_cannabis_amt_recode"
+    type <- "Categorical"
+  } else if (model == "Model E") {
+    trauma_var <- "trauma_load_interpersonal_1 + trauma_load_noninter_1_nhs"
+    covar <- "+ age_at_interview + is_male_f + ses_status_f +
+             assist_tobacco_amt_recode + assist_alcohol_amt_recode + 
+                   assist_cannabis_amt_recode + site_location_group_f"
+    type <- "Numeric"
+  }
+
+  
+    fmla <- as.formula(paste("cidi_load", " ~ ",  
+                             trauma_var, covar))
+    
+    # Fit the negative binomial regression model
+    fit <- glm.nb(fmla, data = nmex_cases)
+    
+    #####
+    print(model)
+    
+    fixef <- exp(coef(fit))
+    conf <- exp(confint(fit, level = (1 - 0.05 / bon_cor)))
+    conf <- exp(confint(fit))
+    conf_complete <- conf[complete.cases(conf), ]
+    
+    var <- rownames(conf_complete)
+    
+    for (j in 1:length(var)) {
+    
+     var_temp <-  var[j]
+     
+     est     <-  round(exp(summary(fit)[["coefficients"]][var[j], 
+                                                          "Estimate"]),3)
+     ci_ll   <- round(conf_complete[var[j], 1],3)
+     ci_ul   <- round(conf_complete[var[j], 2],3)
+     ci <- paste0("(", ci_ll, ", ", ci_ul, ")")
+     
+  
+     p       <- summary(fit)$coefficients[var[j], "Pr(>|z|)"]
+     model <- model
+  
+        if (p < (0.05 / bon_cor)) {
+          significant <- "Significant"
+        } else {
+          significant <- "Not significant"
+        }
+  
+     results <- rbind(results,c(model, var_temp, est, ci_ll, ci_ul, p, significant, 
+                                type))
+     }
+  }
+
+
+
+df <- as.data.frame(results)
+
+colnames(df)<-c("model","Coefficient","RR", "ci_ll", "ci_ul","p", "significant", 
+                 "type")
+
+
+df <- df %>% mutate(
+  
+  coef_name = factor(case_when(
+  Coefficient == "trauma_load_inter_cat_41" ~ "1",
+  Coefficient == "trauma_load_inter_cat_42" ~ "2",
+  Coefficient == "trauma_load_inter_cat_43" ~ "3",
+  Coefficient == "trauma_load_inter_cat_44+" ~ "4+",
+  Coefficient == "trauma_load_noninter_nhs_cat_41" ~ "1",
+  Coefficient == "trauma_load_noninter_nhs_cat_42" ~ "2",
+  Coefficient == "trauma_load_noninter_nhs_cat_43" ~ "3",
+  Coefficient == "trauma_load_noninter_nhs_cat_44+" ~ "4+",
+  Coefficient == "trauma_load_interpersonal_1" ~ "Continuous",
+  Coefficient == "trauma_load_noninter_1_nhs" ~ "Continuous"
+), levels = c("1",
+              "2",
+              "3",
+              "4+",
+              "Continuous")),
+
+
+type = factor(type, levels = c("Numeric", "Categorical")),
+
+trauma_type = factor(case_when(
+            grepl("noninter", Coefficient) ~ "Non-interpersonal", 
+            grepl("inter_|interpersonal", Coefficient) ~ "Interpersonal"         
+          ), levels = c("Non-interpersonal", "Interpersonal"))
+)
+
+
+df_trauma_only <- df %>% 
+  filter(str_starts(Coefficient, "trauma_load"))
+
+```
+
+
+### Figure NB GLM Model B (current)
+
+
+Here I create the figure for Model B's chronic condition count using the output produced above. 
+```{r}
+
+
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
+
+pdf("NB_ModelB.pdf", width = 8, height = 6)
+
+df_trauma_onlyB <- df_trauma_only %>% filter(model == "Model B")
+df_trauma_onlyB$RR <- as.numeric(df_trauma_onlyB$RR)
+df_trauma_onlyB$ci_ll <- as.numeric(df_trauma_onlyB$ci_ll)
+df_trauma_onlyB$ci_ul <- as.numeric(df_trauma_onlyB$ci_ul)
+
+
+ggplot(df_trauma_onlyB, aes(x = coef_name, y = RR, ymin = ci_ll, 
+                           ymax = ci_ul, shape=trauma_type, color=significant)) +
+  geom_pointrange(position = position_dodge(width = 0.7)) +
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+  geom_hline(yintercept = 1, lty = 2) +
+  theme_bw() + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "right"
+  ) +
+  guides(color = guide_legend(reverse=T),
+         shape = guide_legend(reverse=T))+
+  scale_y_continuous(breaks = seq(0, 1.75, by = 0.25), limits = c(0.75, 1.7)) + 
+  labs(
+    y = "RR (99.7% CI)",
+    x = "Number of Traumatic Events Experienced",
+    color = "Trauma Type"
+  )  + coord_flip()  + 
+  theme(legend.position = "bottom") 
+
+
+dev.off()
+
+
+
+
+```
+
+#### Full Figure Model B + NBGLM (current)
+
+
+Here I combine data from the Logistic Regression/Poisson Regression with the 
+data from the negative binomial regression. 
+
+I also manually add reference points of "0" traumas with OR/ci_ll/ci_ul of 1.
+Finally I relevel the data so the facets are in the correct order. 
+
+```{r}
+df_trauma_onlyB <- df_trauma_only %>% filter(model == "Model B")
+df_trauma_onlyB$OR_or_RR <- df_trauma_onlyB$RR
+df_trauma_onlyB$prevalence <- NA
+df_trauma_onlyB$type <- NA
+df_trauma_onlyB$prevalence <- NA
+df_trauma_onlyB$regression_type <- NA
+df_trauma_onlyB$cidi_name <- "Chronic condition count"
+df_trauma_onlyB$cidi_q <- NA
+df_trauma_onlyB$cidi_var_n <- NA
+df_trauma_onlyB <- df_trauma_onlyB %>% dplyr::select(-RR)
+
+reference_row <- data.frame(cidi_q = NA,
+                            Coefficient = NA,
+                            prevalence = NA, 
+                            OR_or_RR = 1, 
+                            ci_ll = 1, ci_ul = 1,
+                            p = NA, significant = "Not significant",  
+                            model="Model B", 
+                            cidi_var_n = NA, 
+                            type = NA,
+                            regression_type = NA, 
+                            cidi_name = "Chronic condition count",
+                            coef_name = "0", 
+                            trauma_type = "Non-interpersonal")
+df_trauma_onlyB <- rbind(df_trauma_onlyB, reference_row)
+
+reference_row <- data.frame(cidi_q = NA,
+                            Coefficient = NA,
+                            prevalence = NA, 
+                            OR_or_RR = 1, 
+                            ci_ll = 1, ci_ul = 1,
+                            p = NA, significant = "Not significant",  
+                            model="Model B", 
+                            cidi_var_n = NA, 
+                            type = NA,
+                            regression_type = NA, 
+                            cidi_name = "Chronic condition count",
+                            coef_name = "0", 
+                            trauma_type = "Interpersonal")
+df_trauma_onlyB <- rbind(df_trauma_onlyB, reference_row)
+  
+
+df_gg_temp_nb <- rbind(df_gg_temp,df_trauma_onlyB)
+
+
+df_gg_temp_nb$coef_name <- factor(df_gg_temp_nb$coef_name, levels = c("0", "1", "2", "3", "4+"))
+df_gg_temp_nb$OR_or_RR <- as.numeric(as.character(df_gg_temp_nb$OR_or_RR))
+df_gg_temp_nb$ci_ll <- as.numeric(as.character(df_gg_temp_nb$ci_ll))
+df_gg_temp_nb$ci_ul <- as.numeric(as.character(df_gg_temp_nb$ci_ul))
+
+
+
+#Adjust to relevel the data
+cidi_name_order <- c("Pain", "Stomach/intestine ulcer",
+                     "Seasonal allergies", "Neurological",  
+                     "Cardiometabolic", "Respiratory", "Hypothyroidism", "Chronic condition count")
+                     
+                     
+df_gg_temp_nb$cidi_name <- factor(df_gg_temp_nb$cidi_name, levels = cidi_name_order)
+```
+
+
+
+Here I produce the figure. The facets will be in 2 rows, with 4 columns.
+
+
+```{r}
+
+setwd("~/Dropbox (Harvard University)/NeuroMex/Data Analysis/Papers/LEC-CIDI Paper/LEC-CIDI Paper/")
+
+
+pdf(paste0("Compiled results_ModelB_withCCcount",today(),".pdf"), width=10, height=8)
+
+ggplot(df_gg_temp_nb, aes(x=coef_name, y=OR_or_RR, ymin=ci_ll, ymax=ci_ul, 
+                 shape=trauma_type, color=significant)) +
+  geom_pointrange(position=position_dodge(0.5))+
+  geom_hline(yintercept=1, lty=2)+
+  coord_flip()+ 
+  scale_color_manual(breaks=c("Not significant", "Significant"),
+                   values=c("black", "red"),
+                   name = "Significance") +
+  scale_shape_manual(values = c(16, 17),
+                     name = "Trauma Type") + 
+  scale_y_continuous(breaks = seq(0, 4, by = 1), limits = c(0, 5.5)) + 
+  facet_wrap(~cidi_name, nrow=2) +
+  theme_bw() + 
+  guides(color = guide_legend(reverse=T),
+         shape = guide_legend(reverse=T))+
+  xlab("Number of Traumatic Events Experienced")+
+  ylab("OR/RR (99.7% CI)")+
+  theme(legend.position = "bottom") 
+
+
+dev.off()
+
+
+
+```
